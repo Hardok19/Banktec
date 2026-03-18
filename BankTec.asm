@@ -1,5 +1,38 @@
 ; BANKTEC Harold Madriz Cerdas
 data segment
+    
+        ;------CUENTAS------;
+    Ncuentas        db 290 dup(0)  ; arreglo 10 cuentas x 29 bytes
+    total_cuentas   db 0           ; contador de cuentas creadas
+    
+    OFF_NUM     equ 0   ; offset numero de cuenta
+    OFF_NOMBRE  equ 1   ; offset nombre titular
+    OFF_SALDO_D equ 24  ; offset saldo decimales
+    OFF_SALDO_E equ 26  ;offset saldo entero 
+    OFF_ESTADO   equ 28  ; offset estado (bit0=desactivado)
+    TAM_CUENTA  equ 29  ; tama?o en bytes por cuenta
+    
+    
+    
+    
+
+    
+    saldobancototal dd 0   ; 32 bits manuales 
+    
+ 
+    temp dw ? ;valor temporal para bucles
+    
+    
+    numero_mostrado db "0", "$" ;buffer para mostrar numeros
+    
+    cuentas_inactivas db 0 ;contador cuentas inactivas
+    cuentas_activas db 0 ; contador cuentas activas
+    
+    buffer db 20, 0, 20 dup(0)
+    
+    
+    
+    
     menu_title    db "---------------------------$"
     menu_line1    db "BANKTEC                    $"
     menu_line2    db "---------------------------$"
@@ -23,25 +56,44 @@ data segment
     msg_desac     db ">>Desactivar cuenta seleccionada.", 0Dh, 0Ah, "$"
     
     
-    
+
     
     new_nombre      db "Digite su nombre:  $"
     maxcuentas_ex db "El numero de cuentas ha alcanzado su límite $"
     
+    msg_decimales? db "Desea ingresar decimales? Y/N $"
+    msg_decimales db "Ingrese el monto de decimales (max 9999) $"
+    
+    msg_enteros db "Ingrese el monto $"
+    
+    msg_notmonto db "Monto inválido $"
+    
+    msg_depositado db "Saldo anadido correctamente $"
+    
+    
+    
+
+    msg_susaldo db "Su saldo es: $"
+    
+    msg_activas db "Cuentas activas: $"
+    msg_inactivas db "Cuentas inactivas: $"
+    msg_saldo_total db "Saldo total del banco: $"
+    msg_cuentamayor db "La cuenta con mayor saldo es: $"
+    msg_cuentamenor db "La cuenta con menor saldo es: $"  
+    
+
+    msg_desactive db "Digite el numero de cuenta a desactivar: $"
+    msg_desactivada db "Cuenta desactivada $"
     
     
     
     
-    ;------CUENTAS------;
-    Ncuentas        db 300 dup(0)  ; arreglo 10 cuentas x 30 bytes
-    total_cuentas   db 0           ; contador de cuentas creadas
+    msg_askNcuenta db "Digite su numero de cuenta: $"
+    msg_nocuentas db "No se ha creado ninguna cuenta $"
     
-    OFF_NUM     equ 0   ; offset numero de cuenta
-    OFF_NOMBRE  equ 1   ; offset nombre titular
-    OFF_SALDO_L equ 21  ; offset saldo parte baja
-    OFF_SALDO_H equ 25  ; offset saldo parte alta
-    OFF_ESTADO   equ 29  ; offset flags (bit0=estado)
-    TAM_CUENTA  equ 30  ; tama?o en bytes por cuenta
+    
+    msg_invalidC db "Numero de cuenta inválido: $"
+
 
 ends
 
@@ -83,7 +135,7 @@ code segment
         mov dl, 5
         mov ah, 02h
         int 10h
-        lea dx, menu_line2
+        lea dx, menu_line2 ;separador ---
         call print_str
         
         mov dh, 5
@@ -139,7 +191,7 @@ code segment
         mov dl, 5
         mov ah, 02h
         int 10h
-        lea dx, menu_line3
+        lea dx, menu_line3 ;separador ---
         call print_str
         
         mov dh, 14
@@ -184,16 +236,24 @@ code segment
         
        
         cmp total_cuentas, 10 ;verifica si se alcanzó el máximo de cuentas
-        JAE cuentasfull:  
+        jae cuentasfull:  
+        
+        ; Calcular offset de la cuenta actual
+        mov al, total_cuentas   ; AL = número de cuenta actual
+        mov bl, TAM_CUENTA      ; BL = 30
+        mul bl                  ; AX = total_cuentas * 30
+        
+        push ax                 ; <-- GUARDAR el offset
     
-    
-    
+        ; Apuntar BX al inicio de esta cuenta
+        lea bx, Ncuentas
+        add bx, ax              ; BX = Ncuentas + (total_cuentas * 30)
+        
         call limpiar_pantalla 
-        call posicionar 
-        mov dh, 2
-        mov dl, 5
-        mov ah, 02h
-        int 10h
+        call posicionar
+        
+         
+
         lea dx, msg_crear
         call print_str
         
@@ -204,35 +264,213 @@ code segment
         lea dx, new_nombre
         call print_str
         
-        ;Configurar el buffer ANTES de leer
+        
+        pop ax                  ; <-- RECUPERAR el offset 
+        
+        
+        ; Asignar número de cuenta (total_cuentas + 1)
         lea bx, Ncuentas
-        add bx, OFF_NOMBRE
-        mov byte ptr [bx], 20    ; primer byte = máximo de caracteres
+        add bx, ax
+        mov cl, total_cuentas
+        inc cl                  ; cl = 1, 2, 3...
+        mov byte ptr [bx + OFF_NUM], cl
+        
+        ; Configurar buffer para esta cuenta específica
+        lea bx, Ncuentas
+        add bx, ax
+        mov byte ptr [bx + OFF_NOMBRE],     20  ; máx caracteres
+        mov byte ptr [bx + OFF_NOMBRE + 1],  0  ; bytes leídos = 0
+        
+        ; Saldo inicial = 0
+        mov word ptr [bx + OFF_SALDO_D], 0
+        mov word ptr [bx + OFF_SALDO_E], 0
         
         
-        ;Apuntar DX al buffer ya configurado
+        ;DX apunta al buffer
         lea dx, Ncuentas
-        add dx, OFF_NOMBRE
+        add dx, ax
+        add dx, OFF_NOMBRE      
         mov ah, 0Ah
-        int 21h
-    
-        lea dx, newline
-        call print_str
+        int 21h                 ;espera el input 
         
         
-        inc total_cuentas ;incrementa las cuentas creadas
+            
+         
+        mov al, [bx + OFF_NOMBRE + 1]   ; al = longitud del nombre
+        mov ah, 0                        ; limpiar ah (o usa cbw / movzx)
+        mov si, ax                       ; pasar a registro de índice válido
+        mov [bx + OFF_NOMBRE + 2 + si], "$"  ; ? si es válido como índice
+  
+          
+        
+        
+        ; Activar la cuenta
+        lea bx, Ncuentas
+        add bx, ax
+        or byte ptr [bx + OFF_ESTADO], 00000001b
+        
+        
+      
+        
+
+        
+
+        
+        inc total_cuentas
+        inc cuentas_activas
+        
+
         jmp menu_loop
     
     opcion2: ;Depositar dinero
-        mov dh, 16
+        call limpiar_pantalla
+        call posicionar
+        lea dx, msg_dep
+        call print_str
+        
+        cmp total_cuentas, 0
+        je nocuentas 
+        
+        mov dh, 4
         mov dl, 5
         mov ah, 02h
         int 10h
-        lea dx, msg_dep
+        lea dx, msg_askNcuenta
         call print_str
-        mov ah, 01h
+        
+        
+        mov ah, 0Ah
+        lea dx, buffer    ; Buffer para leer string
+        
+        
+      
         int 21h
-        jmp menu_loop
+        
+         
+
+        call ascii_to_decimal
+        
+        
+        
+        
+
+        mov bl, TAM_CUENTA
+        mul bl                  ; AX = índice * 29
+        
+
+        
+        mov temp, ax 
+        
+        sub temp, TAM_CUENTA   ;se quitan el tamaño para empezar desde el ínidice 0 
+        
+        call limpiar_pantalla
+        call posicionar
+        
+        
+        
+        
+        
+        lea dx, msg_decimales? ;pregunta al usuario si desea ingresar decimales
+        call print_str
+        
+        
+        ; Leer tecla del usuario
+        mov ah, 01h          ; lee caracter
+        int 21h              ; AL = car?cter leido
+           
+        cmp al, 'y'        ;revisa la respuesta del usuario 
+        je suma_decimales
+        cmp al, 'n'
+        je suma_enteros  
+        
+        
+        
+        suma_decimales:
+            call limpiar_pantalla
+            call posicionar
+            
+            lea dx, msg_decimales
+            call print_str
+            mov ah, 0Ah
+            lea dx, buffer    ; Buffer para leer string
+            int 21h
+             
+
+             
+            call ascii_to_decimal
+            
+            mov bx, temp
+            ; sumar decimales
+            add word ptr [bx + OFF_SALDO_D], ax
+            add word ptr [saldobancototal], ax
+            
+            ; si >= 10000 ? ajustar
+            cmp word ptr [bx + OFF_SALDO_D], 10000
+            jb suma_enteros
+            
+            sub word ptr [saldobancototal], 10000 
+            sub word ptr [bx + OFF_SALDO_D], 10000
+            
+            inc word ptr [bx + OFF_SALDO_E]
+            inc word ptr [saldobancototal + 2]
+            
+            
+            
+              
+                
+        
+        
+        suma_enteros:
+            call limpiar_pantalla
+            call posicionar
+            
+            lea dx, msg_enteros
+            call print_str
+            mov ah, 0Ah
+            lea dx, buffer    ; Buffer para leer string
+            int 21h
+            
+
+            call ascii_to_decimal
+             
+            mov bx, temp 
+            ; sumar enteros
+            add word ptr [bx + OFF_SALDO_E], ax
+            add word ptr [saldobancototal + 2], ax
+            
+        
+        
+        
+        jmp menu_loop 
+        
+        
+        cuentainv:
+            mov dh, 7
+            mov dl, 12
+            mov ah, 02h
+            int 10h 
+            
+            lea dx, msg_invalidC
+            call print_str
+            mov ah, 01h
+            int 21h
+            jmp menu_loop
+            
+        
+        nocuentas:
+            mov dh, 7
+            mov dl, 12
+            mov ah, 02h
+            int 10h
+            
+            lea dx, msg_nocuentas
+            call print_str
+            mov ah, 01h
+            int 21h
+            jmp menu_loop
+        
+        
+        
     
     opcion3: ;Retirar dinero
         mov dh, 16
@@ -257,15 +495,113 @@ code segment
         jmp menu_loop
     
     opcion5: ;Mostrar reporte general
-        mov dh, 16
-        mov dl, 5
-        mov ah, 02h
-        int 10h
+        call limpiar_pantalla 
+        call posicionar
+
         lea dx, msg_rep
         call print_str
+        
+        mov dl, 5 ;posiciona el cursor abajo del título
+        mov dh, 4
+        mov ah, 02h
+        int 10h
+        
+        
+        lea dx, msg_activas ;mensaje de cuentas activas
+        call print_str 
+        
+        
+        
+        
+        mov al, [cuentas_activas]  
+        add al, 30h              ;convierte a ASCII el numero de cuentas activas
+        mov numero_mostrado, al
+        
+        
+        
+        lea dx, numero_mostrado  ;cuentas activas
+        call print_str
+        
+        
+        mov dl, 5
+        mov dh, 5
+        mov ah, 02h
+        int 10h
+        
+        
+        lea dx, msg_inactivas  ;mensaje de cuentas inaactivas
+        call print_str 
+        
+        
+        
+        
+        mov al, [cuentas_inactivas]
+        add al, 30h
+        mov numero_mostrado, al
+        
+        
+        
+        lea dx, numero_mostrado   ;cuentas inactivas
+        call print_str
+        
+    
+        mov dl, 5
+        mov dh, 6
+        mov ah, 02h
+        int 10h
+        
+        
+        ;mostrar saldo del banco
+        lea dx, msg_saldo_total
+        call print_str
+        
+        ; imprimir valor
+        call print_saldo_total
+        
+ 
+        
+        
+        mov dl, 5
+        mov dh, 8
+        mov ah, 02h
+        int 10h
+        
+        lea dx, msg_cuentamayor
+        call print_str
+        
+        call cuentamayor
+        
+        mov bx, temp
+        
+        
+        lea dx, [bx + OFF_NOMBRE + 2]
+        call print_str
+        
+        
+        
+        mov dl, 5 
+        mov dh, 10
+        mov ah, 02h
+        int 10h        
+        lea dx, msg_cuentamenor
+        call print_str
+        
+        
+        call cuentamenor
+        
+        mov bx, temp
+        
+        
+        lea dx, [bx + OFF_NOMBRE + 2]
+        call print_str
+        
+        
+        
+
         mov ah, 01h
         int 21h
         jmp menu_loop
+
     
     opcion6: ;Desactivar cuenta
         mov dh, 16
@@ -285,8 +621,6 @@ code segment
         int 10h
         lea dx, msg_salir
         call print_str
-        mov ah, 01h
-        int 21h
         jmp salir
     
     
@@ -304,8 +638,232 @@ code segment
         jmp menu_loop            
     
     
+    print_uint16 proc
+        push ax
+        push bx
+        push cx
+        push dx
+    
+        mov cx, 0
+        mov bx, 10
+
+    convert:
+        xor dx, dx
+        div bx
+        push dx
+        inc cx
+        test ax, ax
+        jnz convert
+    
+    print:
+        pop dx
+        add dl, '0'
+        mov ah, 02h
+        int 21h
+        loop print
+    
+        pop dx
+        pop cx
+        pop bx
+        pop ax
+        ret
+    print_uint16 endp
+    
+    print_4dec proc
+        push ax
+        push bx
+        push cx
+        push dx
+    
+        mov bx, 10
+        mov cx, 4
+
+    ; guardar dígitos (incluyendo ceros)
+    extract:
+        xor dx, dx
+        div bx
+        push dx
+        loop extract
+    
+        mov cx, 4
+    
+    print_dec:
+        pop dx
+        add dl, '0'
+        mov ah, 02h
+        int 21h
+        loop print_dec
+    
+        pop dx
+        pop cx
+        pop bx
+        pop ax
+        ret
+    print_4dec endp
+
+    print_saldo_total proc
+        push ax
+        push dx
+    
+        ; entero
+        mov ax, word ptr [saldobancototal+2]
+        call print_uint16
+    
+        ; punto decimal
+        mov ah, 02h
+        mov dl, '.'
+        int 21h
+    
+        ; decimales
+        mov ax, word ptr [saldobancototal]
+        call print_4dec
+    
+        pop dx
+        pop ax
+        ret
+
+    
+
+    
+    ascii_to_decimal:
+        ; Entrada: DS:DX = buffer con el string (formato DOS Ah)
+        ; Salida: AX = valor decimal convertido
+        
+        xor ax, ax          ; AX = 0 (acumulador resultado)
+        mov si, dx          ; SI = dirección del buffer
+        add si, 2           ; Salta longitud y contador en buffer DOS
+        mov cx, 10          ; Multiplicador (base 10)
+        
+    input_loop:
+        mov bl, [si]        ; Lee siguiente carácter
+        
+        cmp bl, 0dh         
+        je end_input
+        cmp bl, 0ah         
+        je end_input
+        cmp bl, 0           
+        je end_input
+        
+        ; Verifica que sea dígito
+        cmp bl, '0'
+        jl end_input
+        cmp bl, '9'
+        jg end_input
+        
+        sub bl, '0'         ; Convierte ASCII a número
+        
+        ; resultado = resultado * 10 + dígito
+        mov bx, ax          ; Guarda AX en BX temporalmente
+        mov ax, cx          ; AX = 10
+        mul bx              ; DX:AX = BX * 10
+        mov bx, 0
+        mov bl, [si]        ; Vuelve a cargar el carácter
+        sub bl, '0'         ; Convierte a número
+        add ax, bx          ; Suma el dígito
+        
+        inc si              ; Siguiente carácter
+        jmp input_loop
+        
+    end_input:
+        ret
+
+
     
     
+    
+    cuentamayor:     ;revisa que cuenta tiene más saldo
+        
+        mov bx, 0
+        mov temp, 0 ;pone bx y temp en 0 para recorrer las cuentas 
+        
+        
+        mov cx, 0
+        mov cl, total_cuentas
+        
+        
+        mayorloop:
+            mov ax, [bx + OFF_SALDO_E] 
+            cmp ax, [bx + OFF_SALDO_E, + TAM_CUENTA]
+            je mayor_dec ;revisa si los decimales tambíen son iguales
+            
+            cmp ax, [bx + TAM_CUENTA + OFF_SALDO_E]
+            jl savetemp_bx  ;guarda el valor de bx+1
+            
+            
+            add bx, TAM_CUENTA
+            loop mayorloop
+        
+            
+        ret
+        
+ 
+    
+    mayor_dec:     ;verifica si los decimales son mayores
+        mov bx, 0
+        mov temp, 0 ;pone bx y temp en 0 para recorrer las cuentas 
+        
+        
+        mov cx, 0
+        mov cl, total_cuentas
+        mayorDecloop:
+            mov ax, [bx + OFF_SALDO_D]         
+            cmp ax, [bx + OFF_SALDO_D + TAM_CUENTA]
+            jl savetemp_bx  ;guarda el valor de bx+1
+            
+            add bx, TAM_CUENTA
+            loop mayorDecloop
+        
+            
+        ret
+        
+    cuentamenor:     ;revisa que cuenta tiene menos saldo
+        
+        mov bx, 0
+        mov temp, 0 ;pone bx y temp en 0 para recorrer las cuentas 
+        
+        
+        mov cx, 0
+        mov cl, total_cuentas
+        
+        
+        menorloop:
+            mov ax, [bx + OFF_SALDO_E] 
+            cmp ax, [bx + OFF_SALDO_E, + TAM_CUENTA]
+            je mayor_dec ;revisa si los decimales tambíen son iguales
+            
+            cmp ax, [bx + TAM_CUENTA + OFF_SALDO_E]
+            jg savetemp_bx  ;guarda el valor de bx+1
+            
+            
+            add bx, TAM_CUENTA
+            loop menorloop
+        
+            
+        ret
+        
+    menor_dec:     ;verifica si los decimales son menores
+        mov bx, 0
+        mov temp, 0 ;pone bx y temp en 0 para recorrer las cuentas 
+        
+        
+        mov cx, 0
+        mov cl, total_cuentas
+        menorDecloop:
+            mov ax, [bx + OFF_SALDO_D]         
+            cmp ax, [bx + OFF_SALDO_D + TAM_CUENTA]
+            jg savetemp_bx  ;guarda el valor de bx+1
+            
+            add bx, TAM_CUENTA
+            loop menorDecloop
+        
+            
+        ret    
+        
+
+    savetemp_bx: ;guarda  en temp el indice de bx+1
+        mov temp, bx
+        add temp, TAM_CUENTA
+        ret
         
     ;imprimir cadena en DS:DX --
     print_str:
@@ -334,6 +892,8 @@ code segment
         int 21h
 
 
+
+    
 ends
 
 
