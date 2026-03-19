@@ -60,6 +60,7 @@ data segment
     
     new_nombre      db "Digite su nombre:  $"
     maxcuentas_ex db "El numero de cuentas ha alcanzado su límite $"
+    msg_ncuenta_asig db "Su numero de cuenta es: $"
     
     msg_decimales? db "Desea ingresar decimales? Y/N $"
     msg_decimales db "Ingrese el monto de decimales (max 9999) $"
@@ -76,6 +77,14 @@ data segment
     msg_susaldo db "Su saldo es: $"
     msg_saldoinv db "Valor introducido es inválido $"
     
+    
+    msg_fondos    db "Fondos insuficientes para realizar el retiro $"
+    msg_retirado  db "Retiro realizado correctamente $"
+    
+    msg_titular db "Titular: $"
+    
+    
+    
     msg_activas db "Cuentas activas: $"
     msg_inactivas db "Cuentas inactivas: $"
     msg_saldo_total db "Saldo total del banco: $"
@@ -85,6 +94,7 @@ data segment
 
     msg_desactive db "Digite el numero de cuenta a desactivar: $"
     msg_desactivada db "Cuenta desactivada $"
+    msg_ya_desactivada db "No se puede desactivar cuentas inactivas: $"
     
     
     
@@ -310,6 +320,28 @@ code segment
         inc total_cuentas
         inc cuentas_activas
         
+        
+        ; --- Mostrar número de cuenta asignado ---
+        mov dh, 6
+        mov dl, 5
+        mov ah, 02h
+        int 10h
+        
+        lea dx, msg_ncuenta_asig    ; "Su numero de cuenta es: "
+        call print_str
+        
+        mov al, [bx + OFF_NUM]      ; AL = número de cuenta (1..10)
+        add al, '0'                 ; convertir a ASCII
+        mov numero_mostrado, al     
+        
+        lea dx, numero_mostrado
+        call print_str
+        
+        mov ah, 01h                 ; esperar tecla antes de volver
+        int 21h
+        
+         
+        
 
         jmp menu_loop
     
@@ -332,9 +364,6 @@ code segment
         
         mov ah, 0Ah
         lea dx, buffer    ; Buffer para leer string
-        
-        
-      
         int 21h
         
          
@@ -354,31 +383,23 @@ code segment
 
         mov bl, TAM_CUENTA
         mul bl                  ; AX = índice * 29
-        
-
-        
         mov temp, ax         ;se mueve a temp para usar el indice des´pues
         
          
         
         sub temp, TAM_CUENTA   ;se quitan el tamaño para empezar desde el ínidice 0
-       
         mov bx, temp
-        
 
         
         cmp byte ptr [bx + OFF_ESTADO], 0  ;verifica si está desactivada
         je desactivada                     ;si desactivada(0) error
          
-         
-         
+
          
         call limpiar_pantalla
         call posicionar
         
-        
-        
-        
+ 
         
         lea dx, msg_decimales? ;pregunta al usuario si desea ingresar decimales
         call print_str
@@ -507,72 +528,45 @@ code segment
         lea dx, msg_askNcuenta
         call print_str
         
-        
         mov ah, 0Ah
-        lea dx, buffer    ; Buffer para leer string
-        
-        
-      
+        lea dx, buffer
         int 21h
         
-         
-
         call ascii_to_decimal  ;devuelve ax como numero
         
         cmp ax, 0
-        jle cuentainv   ;si el numero es menor a las cuentas posibles error
+        jle cuentainv
         
-          
         cmp ax, 10
-        jg cuentainv    ;si el numero es mayor a las cuentas posibles error
+        jg cuentainv
         
-        cmp total_cuentas, al  ;si el numero podria ser una cuenta pero no existe error 
+        cmp total_cuentas, al
         jl noexiste 
         
-
         mov bl, TAM_CUENTA
         mul bl                  ; AX = índice * 29
         
-
-        
-        mov temp, ax         ;se mueve a temp para usar el indice des´pues
-        
-         
-        
-        sub temp, TAM_CUENTA   ;se quitan el tamaño para empezar desde el ínidice 0
-       
+        mov temp, ax
+        sub temp, TAM_CUENTA    ; índice base 0
         mov bx, temp
         
-
+        cmp byte ptr [bx + OFF_ESTADO], 0
+        je desactivada
         
-        cmp byte ptr [bx + OFF_ESTADO], 0  ;verifica si está desactivada
-        je desactivada                     ;si desactivada(0) error
-         
-         
-         
-         
         call limpiar_pantalla
         call posicionar
         
-        
-        
-        
-        
-        lea dx, msg_decimales? ;pregunta al usuario si desea ingresar decimales
+        lea dx, msg_decimales?
         call print_str
         
-        
-        ; Leer tecla del usuario
-        mov ah, 01h          ; lee caracter
-        int 21h              ; AL = car?cter leido
+        mov ah, 01h
+        int 21h
            
-        cmp al, 'y'        ;revisa la respuesta del usuario 
-        je suma_decimales
+        cmp al, 'y'
+        je resta_decimales
         cmp al, 'n'
-        je suma_enteros  
+        je resta_enteros  
         
-        
-        ;Opcion inv?lida
         mov dh, 16
         mov dl, 5
         mov ah, 02h
@@ -584,7 +578,6 @@ code segment
         jmp menu_loop
         
         
-        
         resta_decimales:
             call limpiar_pantalla
             call posicionar
@@ -592,11 +585,9 @@ code segment
             lea dx, msg_decimales
             call print_str
             mov ah, 0Ah
-            lea dx, buffer    ; Buffer para leer string
+            lea dx, buffer
             int 21h
-             
-
-             
+            
             call ascii_to_decimal
             
             cmp ax, 9999
@@ -604,35 +595,57 @@ code segment
             cmp ax, 0
             jl saldo_inmválido
             
+            ; Guardar el monto de decimales a retirar en SI
+            mov si, ax
+            
             mov bx, temp
-            ; sumar decimales
-            add word ptr [bx + OFF_SALDO_D], ax
-            add word ptr [saldobancototal], ax
             
-            cmp word ptr [saldobancototal], 10000
-            jl continue_sub
+            ; Verificar si hay suficiente saldo (enteros + decimales combinados)
+            ; Comparar enteros primero
+            mov ax, word ptr [bx + OFF_SALDO_E]
+            cmp ax, 0
+            jg puede_restar_dec     ; Si hay enteros, siempre puede cubrir decimales
             
-            inc word ptr [saldobancototal + 2], 1
-            sub word ptr [saldobancototal], 10000
-
+            ; Si enteros = 0, verificar que decimales del saldo >= monto a retirar
+            mov ax, word ptr [bx + OFF_SALDO_D]
+            cmp ax, si
+            jl fondos_insuficientes
             
-            add word ptr [saldobancototal + 2], 1
+        puede_restar_dec:
+            mov bx, temp
             
-            continue_sub:                                    
-                ; si >= 10000 ? ajustar
-                cmp word ptr [bx + OFF_SALDO_D], 10000   ;si los valores de los decimales 
-                jl suma_enteros                         ;llegan a 9999 suma un entero y resta decimales
-                
-                 
-                sub word ptr [bx + OFF_SALDO_D], 10000
-                inc word ptr [bx + OFF_SALDO_E]
-
+            ; Restar decimales
+            mov ax, word ptr [bx + OFF_SALDO_D]
+            sub ax, si
             
-
+            ; Si el resultado es negativo (hubo borrow), pedir prestado al entero
+            jnc decimales_ok        ; sin carry = resultado >= 0, OK
             
-              
-               
-        
+            ; Resultado negativo: restar 1 al entero y sumar 10000 a decimales
+            cmp word ptr [bx + OFF_SALDO_E], 0
+            je fondos_insuficientes ; No hay enteros para pedir prestado
+            
+            add ax, 10000           ; compensar el "borrow": resultado + 10000
+            dec word ptr [bx + OFF_SALDO_E]
+            
+            ; También ajustar saldo total del banco
+            dec word ptr [saldobancototal + 2]
+            add word ptr [saldobancototal], 10000
+            
+        decimales_ok:
+            mov word ptr [bx + OFF_SALDO_D], ax
+            
+            ; Restar decimales del saldo total del banco
+            sub word ptr [saldobancototal], si
+            jnc banco_dec_ok
+            ; borrow en banco también
+            dec word ptr [saldobancototal + 2]
+            add word ptr [saldobancototal], 10000
+            sub word ptr [saldobancototal], si  ; restar de nuevo con el ajuste
+            
+        banco_dec_ok:
+            ; Continua a preguntar enteros
+            
         
         resta_enteros:
             call limpiar_pantalla
@@ -641,40 +654,133 @@ code segment
             lea dx, msg_enteros
             call print_str
             mov ah, 0Ah
-            lea dx, buffer    ; Buffer para leer string
+            lea dx, buffer
             int 21h
             
-
             call ascii_to_decimal
-             
-            mov bx, temp 
-            ; sumar enteros
-            add word ptr [bx + OFF_SALDO_E], ax
-            add word ptr [saldobancototal + 2], ax
+            
+            ; Verificar que no sea negativo
+            cmp ax, 0
+            jl saldo_inmválido
+            
+            ; Verificar que haya suficiente saldo entero
+            mov bx, temp
+            mov si, ax              ; SI = monto entero a retirar
+            
+            mov ax, word ptr [bx + OFF_SALDO_E]
+            cmp ax, si
+            jl fondos_insuficientes ; saldo entero < monto a retirar
+            
+            ; Restar enteros
+            sub ax, si
+            mov word ptr [bx + OFF_SALDO_E], ax
+            
+            ; Restar del saldo total del banco
+            sub word ptr [saldobancototal + 2], si
             
             jmp retiro_exitoso
             
             
+        fondos_insuficientes:
+            mov dh, 7
+            mov dl, 12
+            mov ah, 02h
+            int 10h
+            lea dx, msg_fondos      ; necesitas agregar este mensaje al data segment
+            call print_str
+            mov ah, 01h
+            int 21h
+            jmp menu_loop
             
-            retiro_exitoso:
-                mov dh, 7
-                mov dl, 12
-                mov ah, 02h
-                int 10h 
-                
-                lea dx, msg_depositado
-                call print_str
-                mov ah, 01h
-                int 21h
-                jmp menu_loop
-    
+        retiro_exitoso:
+            mov dh, 7
+            mov dl, 12
+            mov ah, 02h
+            int 10h 
+            
+            lea dx, msg_retirado    ; necesitas agregar este mensaje al data segment
+            call print_str
+            mov ah, 01h
+            int 21h
+            jmp menu_loop
+
     opcion4: ;Consultar saldo
-        mov dh, 16
+        call limpiar_pantalla
+        call posicionar
+        lea dx, msg_saldo          ; ">>Consultar saldo seleccionado."
+        call print_str
+        
+        cmp total_cuentas, 0
+        je nocuentas
+        
+        mov dh, 4
         mov dl, 5
         mov ah, 02h
         int 10h
-        lea dx, msg_saldo
+        lea dx, msg_askNcuenta     ; "Digite su numero de cuenta:"
         call print_str
+        
+        mov ah, 0Ah
+        lea dx, buffer
+        int 21h
+        
+        call ascii_to_decimal
+        
+        cmp ax, 0
+        jle cuentainv
+        
+        cmp ax, 10
+        jg cuentainv
+        
+        cmp total_cuentas, al
+        jl noexiste 
+        
+        mov bl, TAM_CUENTA
+        mul bl                      ; AX = índice * 29
+        
+        mov temp, ax
+        sub temp, TAM_CUENTA        ; índice base 0
+        mov bx, temp
+        
+        cmp byte ptr [bx + OFF_ESTADO], 0
+        je desactivada
+        
+        ; --- Mostrar nombre del titular ---
+        mov dh, 6
+        mov dl, 5
+        mov ah, 02h
+        int 10h
+        
+        lea dx, msg_titular          
+                                    
+        call print_str
+        
+        lea dx, [bx + OFF_NOMBRE + 2]   ; saltar byte de max y byte de longitud
+        call print_str
+        
+        ; --- Mostrar etiqueta de saldo ---
+        mov dh, 7
+        mov dl, 5
+        mov ah, 02h
+        int 10h
+        
+        lea dx, msg_susaldo         ; "Su saldo es:"
+        call print_str
+        
+        ; --- Imprimir parte entera ---
+        mov ax, word ptr [bx + OFF_SALDO_E]
+        call print_uint16
+        
+        ; --- Imprimir punto decimal ---
+        mov ah, 02h
+        mov dl, '.'
+        int 21h
+        
+        ; --- Imprimir parte decimal (siempre 4 dígitos con ceros a la izquierda) ---
+        mov ax, word ptr [bx + OFF_SALDO_D]
+        call print_4dec
+        
+        ; --- Espera tecla y volver al menú ---
         mov ah, 01h
         int 21h
         jmp menu_loop
@@ -835,6 +941,9 @@ code segment
        
         mov bx, temp
         
+        cmp byte ptr [bx + OFF_ESTADO], 0
+        je ya_desactivada
+        
         
         mov byte ptr [bx + OFF_ESTADO], 0  ;Desactiva la cuenta
         
@@ -844,6 +953,17 @@ code segment
         
         
         call desactivada
+        
+        ya_desactivada:
+            mov dh, 16
+            mov dl, 5
+            mov ah, 02h
+            int 10h
+            lea dx, msg_ya_desactivada
+            call print_str
+            mov ah, 01h
+            int 21h
+            jmp menu_loop            
         
         
     opcion7: ;muesta mensaje de Salir
@@ -1115,37 +1235,33 @@ code segment
         mov ax, [bx + OFF_SALDO_E]
         mov dx, [bx + OFF_SALDO_D]
         
-    menorloop_v3:
+    menorloop:
         ; Pasar a siguiente
         add bx, TAM_CUENTA             ; Siguiente cuenta
         dec cx                 ; Decrementar contador
         cmp cx, 0              ; Quedan cuentas?
-        je fin_v3
+        je fin
         
         ; Comparar
         mov si, [bx + OFF_SALDO_E]
         cmp si, ax
-        jl es_menor_v3
-        jg menorloop_v3
+        jl es_menor
+        jg menorloop
         
         ; Si igual, comparar decimal
         mov si, [bx + OFF_SALDO_D]
         cmp si, dx
-        jge menorloop_v3
+        jge menorloop
         
     es_menor_v3:
         mov temp, bx           ; Guardar puntero (no índice)
         mov ax, [bx + OFF_SALDO_E]
         mov dx, [bx + OFF_SALDO_D]
-        jmp menorloop_v3
+        jmp menorloop
         
-    fin_v3:
+    fin:
         ret
 
-    savetemp_bx: ;guarda  en temp el indice de bx+1
-        mov temp, bx
-        add temp, TAM_CUENTA
-        ret
         
     ;imprimir cadena en DS:DX --
     print_str:
