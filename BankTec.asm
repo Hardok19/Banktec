@@ -1,4 +1,21 @@
-; BANKTEC Harold Madriz Cerdas
+; =============================================================================
+; INSTITUTO TECNOLÓGICO DE COSTA RICA
+; Escuela de Ingeniería en Computadores
+; Paradigmas de Programación (CE1106) - Primer Semestre 2026
+; =============================================================================
+; Proyecto  : BankTec
+; Descripción: Sistema de gestión de cuentas bancarias en Ensamblador 8086.
+;              Permite crear cuentas, depositar, retirar, consultar saldo,
+;              generar reportes y desactivar cuentas. Soporta hasta 10 cuentas
+;              con saldo representado en entero + 4 decimales simulados.
+; -----------------------------------------------------------------------------
+; Autor(es) : Harold Madriz Cerdas
+; Fecha     : 19/03/2026
+; -----------------------------------------------------------------------------
+; Entorno   : TASM / DOSBox - x86 16 bits (8086)
+; Archivo   : BankTec.asm
+; =============================================================================
+
 data segment
     
         ;------CUENTAS------;
@@ -59,7 +76,7 @@ data segment
 
     
     new_nombre      db "Digite su nombre:  $"
-    maxcuentas_ex db "El numero de cuentas ha alcanzado su lÃ­mite $"
+    maxcuentas_ex db "El numero de cuentas ha alcanzado su límite $"
     msg_ncuenta_asig db "Su numero de cuenta es: $"
     
     msg_decimales? db "Desea ingresar decimales? Y/N $"
@@ -67,7 +84,7 @@ data segment
     
     msg_enteros db "Ingrese el monto $"
     
-    msg_notmonto db "Monto invÃ¡lido $"
+    msg_notmonto db "Monto inválido $"
     
     msg_depositado db "Saldo anadido correctamente $"
     
@@ -75,7 +92,7 @@ data segment
     
 
     msg_susaldo db "Su saldo es: $"
-    msg_saldoinv db "Valor introducido es invÃ¡lido $"
+    msg_saldoinv db "Valor introducido es inválido $"
     
     
     msg_fondos    db "Fondos insuficientes para realizar el retiro $"
@@ -103,7 +120,7 @@ data segment
     msg_nocuentas db "No se ha creado ninguna cuenta $"
     
     
-    msg_invalidC db "Numero de cuenta invÃ¡lido: $"
+    msg_invalidC db "Numero de cuenta inválido: $"
     msg_noexiste db "Esta cuenta no existe $"
 
 ends
@@ -246,11 +263,11 @@ code segment
     
         
        
-        cmp total_cuentas, 10 ;verifica si se alcanzÃ³ el mÃ¡ximo de cuentas
-        jae cuentasfull:  
+        cmp total_cuentas, 10 ;verifica si se alcanzó el máximo de cuentas
+        jae cuentasfull  
         
         ; Calcular offset de la cuenta actual
-        mov al, total_cuentas   ; AL = nÃºmero de cuenta actual
+        mov al, total_cuentas   ; AL = número de cuenta actual
         mov bl, TAM_CUENTA      ; BL = 30
         mul bl                  ; AX = total_cuentas * 30
         
@@ -279,18 +296,18 @@ code segment
         pop ax                  ; <-- RECUPERAR el offset 
         
         
-        ; Asignar nÃºmero de cuenta (total_cuentas + 1)
+        ; Asignar número de cuenta (total_cuentas + 1)
         lea bx, Ncuentas
         add bx, ax
         mov cl, total_cuentas
         inc cl                  ; cl = 1, 2, 3...
         mov byte ptr [bx + OFF_NUM], cl
         
-        ; Configurar buffer para esta cuenta especÃ­fica
+        ; Configurar buffer para esta cuenta específica
         lea bx, Ncuentas
         add bx, ax
-        mov byte ptr [bx + OFF_NOMBRE],     20  ; mÃ¡x caracteres
-        mov byte ptr [bx + OFF_NOMBRE + 1],  0  ; bytes leÃ­dos = 0
+        mov byte ptr [bx + OFF_NOMBRE],     20  ; máx caracteres
+        mov byte ptr [bx + OFF_NOMBRE + 1],  0  ; bytes leídos = 0
         
         ; Saldo inicial = 0
         mov word ptr [bx + OFF_SALDO_D], 0
@@ -311,8 +328,8 @@ code segment
          
         mov al, [bx + OFF_NOMBRE + 1]   ; al = longitud del nombre
         mov ah, 0                        ; limpiar ah 
-        mov si, ax                       ; pasar a registro de Ã­ndice vÃ¡lido
-        mov [bx + OFF_NOMBRE + 2 + si], "$"  ; pone $ despuÃ©s del ultimo caracter
+        mov si, ax                       ; pasar a registro de índice válido
+        mov [bx + OFF_NOMBRE + 2 + si], "$"  ; pone $ después del ultimo caracter
   
           
 
@@ -321,7 +338,7 @@ code segment
         inc cuentas_activas
         
         
-        ; --- Mostrar nÃºmero de cuenta asignado ---
+        ; --- Mostrar número de cuenta asignado ---
         mov dh, 6
         mov dl, 5
         mov ah, 02h
@@ -330,7 +347,7 @@ code segment
         lea dx, msg_ncuenta_asig    ; "Su numero de cuenta es: "
         call print_str
         
-        mov al, [bx + OFF_NUM]      ; AL = nÃºmero de cuenta (1..10)
+        mov al, [bx + OFF_NUM]      ; AL = número de cuenta (1..10)
         add al, '0'                 ; convertir a ASCII
         mov numero_mostrado, al     
         
@@ -382,16 +399,16 @@ code segment
         
 
         mov bl, TAM_CUENTA
-        mul bl                  ; AX = Ã­ndice * 29
-        mov temp, ax         ;se mueve a temp para usar el indice desÂ´pues
+        mul bl                  ; AX = índice * 29
+        mov temp, ax         ;se mueve a temp para usar el indice des´pues
         
          
         
-        sub temp, TAM_CUENTA   ;se quitan el tamaÃ±o para empezar desde el Ã­nidice 0
+        sub temp, TAM_CUENTA   ;se quitan el tamaño para empezar desde el ínidice 0
         mov bx, temp
 
         
-        cmp byte ptr [bx + OFF_ESTADO], 0  ;verifica si estÃ¡ desactivada
+        cmp byte ptr [bx + OFF_ESTADO], 0  ;verifica si está desactivada
         je desactivada                     ;si desactivada(0) error
          
 
@@ -443,9 +460,9 @@ code segment
             call ascii_to_decimal
             
             cmp ax, 9999
-            jg saldo_inmvÃ¡lido 
+            jg saldo_inmválido 
             cmp ax, 0
-            jl saldo_inmvÃ¡lido
+            jl saldo_inmválido
             
             mov bx, temp
             ; sumar decimales
@@ -544,10 +561,10 @@ code segment
         jl noexiste 
         
         mov bl, TAM_CUENTA
-        mul bl                  ; AX = Ã­ndice * 29
+        mul bl                  ; AX = índice * 29
         
         mov temp, ax
-        sub temp, TAM_CUENTA    ; Ã­ndice base 0
+        sub temp, TAM_CUENTA    ; índice base 0
         mov bx, temp
         
         cmp byte ptr [bx + OFF_ESTADO], 0
@@ -591,9 +608,9 @@ code segment
             call ascii_to_decimal
             
             cmp ax, 9999
-            jg saldo_inmvÃ¡lido 
+            jg saldo_inmválido 
             cmp ax, 0
-            jl saldo_inmvÃ¡lido
+            jl saldo_inmválido
             
             ; Guardar el monto de decimales a retirar en SI
             mov si, ax
@@ -628,7 +645,7 @@ code segment
             add ax, 10000           ; compensar el "borrow": resultado + 10000
             dec word ptr [bx + OFF_SALDO_E]
             
-            ; TambiÃ©n ajustar saldo total del banco
+            ; También ajustar saldo total del banco
             dec word ptr [saldobancototal + 2]
             add word ptr [saldobancototal], 10000
             
@@ -638,7 +655,7 @@ code segment
             ; Restar decimales del saldo total del banco
             sub word ptr [saldobancototal], si
             jnc banco_dec_ok
-            ; borrow en banco tambiÃ©n
+            ; borrow en banco también
             dec word ptr [saldobancototal + 2]
             add word ptr [saldobancototal], 10000
             sub word ptr [saldobancototal], si  ; restar de nuevo con el ajuste
@@ -661,7 +678,7 @@ code segment
             
             ; Verificar que no sea negativo
             cmp ax, 0
-            jl saldo_inmvÃ¡lido
+            jl saldo_inmválido
             
             ; Verificar que haya suficiente saldo entero
             mov bx, temp
@@ -736,10 +753,10 @@ code segment
         jl noexiste 
         
         mov bl, TAM_CUENTA
-        mul bl                      ; AX = Ã­ndice * 29
+        mul bl                      ; AX = índice * 29
         
         mov temp, ax
-        sub temp, TAM_CUENTA        ; Ã­ndice base 0
+        sub temp, TAM_CUENTA        ; índice base 0
         mov bx, temp
         
         cmp byte ptr [bx + OFF_ESTADO], 0
@@ -776,11 +793,11 @@ code segment
         mov dl, '.'
         int 21h
         
-        ; --- Imprimir parte decimal (siempre 4 dÃ­gitos con ceros a la izquierda) ---
+        ; --- Imprimir parte decimal (siempre 4 dígitos con ceros a la izquierda) ---
         mov ax, word ptr [bx + OFF_SALDO_D]
         call print_4dec
         
-        ; --- Espera tecla y volver al menÃº ---
+        ; --- Espera tecla y volver al menú ---
         mov ah, 01h
         int 21h
         jmp menu_loop
@@ -792,7 +809,7 @@ code segment
         lea dx, msg_rep
         call print_str
         
-        mov dl, 5 ;posiciona el cursor abajo del tÃ­tulo
+        mov dl, 5 ;posiciona el cursor abajo del título
         mov dh, 4
         mov ah, 02h
         int 10h
@@ -929,15 +946,15 @@ code segment
         
 
         mov bl, TAM_CUENTA
-        mul bl                  ; AX = Ã­ndice * 29
+        mul bl                  ; AX = índice * 29
         
 
         
-        mov temp, ax         ;se mueve a temp para usar el indice desÂ´pues
+        mov temp, ax         ;se mueve a temp para usar el indice des´pues
         
          
         
-        sub temp, TAM_CUENTA   ;se quitan el tamaÃ±o para empezar desde el Ã­nidice 0
+        sub temp, TAM_CUENTA   ;se quitan el tamaño para empezar desde el ínidice 0
        
         mov bx, temp
         
@@ -986,7 +1003,7 @@ code segment
         mov ah, 01h
         int 21h
         jmp menu_loop
-    saldo_inmvÃ¡lido:
+    saldo_inmválido:
         mov dh, 7
         mov dl, 12
         mov ah, 02h
@@ -1034,7 +1051,7 @@ code segment
             
             
             
-    cuentasfull: ;Mensaje de que se han creado el mÃ¡ximo de cuentas
+    cuentasfull: ;Mensaje de que se han creado el máximo de cuentas
         call limpiar_pantalla
         call posicionar
         mov dh, 2
@@ -1088,7 +1105,7 @@ code segment
         mov bx, 10
         mov cx, 4
 
-    ; guardar dÃ­gitos (incluyendo ceros)
+    ; guardar dígitos (incluyendo ceros)
     extract:
         xor dx, dx
         div bx
@@ -1140,12 +1157,12 @@ code segment
         ; Salida: AX = valor decimal convertido
         
         xor ax, ax          ; AX = 0 (acumulador resultado)
-        mov si, dx          ; SI = direcciÃ³n del buffer
+        mov si, dx          ; SI = dirección del buffer
         add si, 2           ; Salta longitud y contador en buffer DOS
         mov cx, 10          ; Multiplicador (base 10)
         
     input_loop:
-        mov bl, [si]        ; Lee siguiente carÃ¡cter
+        mov bl, [si]        ; Lee siguiente carácter
         
         cmp bl, 0dh         
         je end_input
@@ -1154,24 +1171,24 @@ code segment
         cmp bl, 0           
         je end_input
         
-        ; Verifica que sea dÃ­gito
+        ; Verifica que sea dígito
         cmp bl, '0'
         jl end_input
         cmp bl, '9'
         jg end_input
         
-        sub bl, '0'         ; Convierte ASCII a nÃºmero
+        sub bl, '0'         ; Convierte ASCII a número
         
-        ; resultado = resultado * 10 + dÃ­gito
+        ; resultado = resultado * 10 + dígito
         mov bx, ax          ; Guarda AX en BX temporalmente
         mov ax, cx          ; AX = 10
         mul bx              ; DX:AX = BX * 10
         mov bx, 0
-        mov bl, [si]        ; Vuelve a cargar el carÃ¡cter
-        sub bl, '0'         ; Convierte a nÃºmero
-        add ax, bx          ; Suma el dÃ­gito
+        mov bl, [si]        ; Vuelve a cargar el carácter
+        sub bl, '0'         ; Convierte a número
+        add ax, bx          ; Suma el dígito
         
-        inc si              ; Siguiente carÃ¡cter
+        inc si              ; Siguiente carácter
         jmp input_loop 
         
     end_input:
@@ -1181,7 +1198,7 @@ code segment
     
     
     
-    cuentamayor:     ;revisa que cuenta tiene mÃ¡s saldo
+    cuentamayor:     ;revisa que cuenta tiene más saldo
         mov cx, 0
         mov cl, total_cuentas
         cmp cl, 0
@@ -1190,7 +1207,7 @@ code segment
         mov bx, 0                    ; BX = puntero a cuenta actual
         mov temp, 0                  ; temp = puntero a mayor cuenta
         
-        ; Cargar primera como mÃ¡ximo
+        ; Cargar primera como máximo
         mov ax, [bx + OFF_SALDO_E]
         mov dx, [bx + OFF_SALDO_D]
         
@@ -1210,10 +1227,10 @@ code segment
         ; Si igual, comparar decimal
         mov si, [bx + OFF_SALDO_D]
         cmp si, dx
-        jle mayorloop           ; Si <= mÃ­nimo, continuar
+        jle mayorloop           ; Si <= mínimo, continuar
         
     es_mayor:
-        mov temp, bx           ; Guardar puntero (no Ã­ndice)
+        mov temp, bx           ; Guardar puntero (no índice)
         mov ax, [bx + OFF_SALDO_E]
         mov dx, [bx + OFF_SALDO_D]
         jmp mayorloop
@@ -1231,7 +1248,7 @@ code segment
         mov bx, 0                    ; BX = puntero a cuenta actual
         mov temp, 0                  ; temp = puntero a menor cuenta
         
-        ; Cargar primera como mÃ­nimo
+        ; Cargar primera como mínimo
         mov ax, [bx + OFF_SALDO_E]
         mov dx, [bx + OFF_SALDO_D]
         
@@ -1254,7 +1271,7 @@ code segment
         jge menorloop
         
     es_menor:
-        mov temp, bx           ; Guardar puntero (no Ã­ndice)
+        mov temp, bx           ; Guardar puntero (no índice)
         mov ax, [bx + OFF_SALDO_E]
         mov dx, [bx + OFF_SALDO_D]
         jmp menorloop
